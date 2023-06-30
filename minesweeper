@@ -1,0 +1,412 @@
+import PySimpleGUI as sg
+from random import randint
+from time import time
+
+
+ROWS = 10
+COLS = 10
+NUM_MINES = ROWS * COLS // 8
+
+class Minesweeper:
+    def __init__(self):
+        self.board = []
+        self.empty_areas = []  # will contain lists of empty areas in the field, will be computed and added here
+
+    def fill_board(self):
+        # one square = (
+        # 0 - (value to print,
+        # 1 - mine=bool - if there is a mine,
+        # 2 - num_neighbor_mines=int,
+        # 3 - clicked=bool,
+        # 4 - value to display to player,
+        # 5 - checked-to connect zero areas - used to calculate neighbors with zero mines to connect the area,
+        # 6 - coordinates )
+        #                0     1    2    3      4      5      6
+        self.board = [[['.', False, 0, False, '[ ]', False, (j, i)] for i in range(COLS)] for j in range(ROWS)]
+
+    # help print
+    def print_board_all_info(self, board):
+        for row in board:
+            for item in row:
+                print(item, end='  ')
+            print()
+
+    # BEST WAY TO ADD MINES - USED
+    def add_mines_clever(self):
+        # num_mines = ROWS * COLS // 5
+        # print(NUM_MINES)
+        mine_coordinates = []
+        mine_counter = 0
+        while True:
+            mine_row = randint(0, ROWS - 1)
+            mine_col = randint(0, COLS - 1)
+            mine_tuple = (mine_row, mine_col)
+            if mine_tuple not in mine_coordinates:
+                mine_coordinates.append((mine_row, mine_col))
+                mine_counter += 1
+                if mine_counter == NUM_MINES:
+                    # print('mine adding finished')
+                    break
+            else:
+                # print('mine already at the same place, find new mine coordinate')
+                continue
+
+        # print('mine coordinates', mine_coordinates)
+        for row in self.board:
+            for i in range(len(row)):
+                if row[i][6] in mine_coordinates:
+                    row[i][0] = 'x'
+                    row[i][1] = True
+        return NUM_MINES
+
+    def compute_neighboring_mines(self):
+        neighbors = [(-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0)]
+        # accessing whole board ## doesn't have to be all squares, only a few
+        for i in range(ROWS):
+            for j in range(COLS):
+                # print('i am at square', i, j, end=', ')
+                # looping through all neighbors
+                for k in range(8):
+                    # print('NI', k, ':', i + neighbors[k][0], j + neighbors[k][1], end=', ')
+                    # if neighbor is not out of bounds
+                    if not (i + neighbors[k][0] < 0 or i + neighbors[k][0] > ROWS - 1 or
+                            j + neighbors[k][1] < 0 or j + neighbors[k][1] > COLS - 1):
+                        # then add 1 to counter for each neighbor with mine
+                        if self.board[i + neighbors[k][0]][j + neighbors[k][1]][1] == True:
+                            self.board[i][j][2] += 1
+                # print()
+
+    def click_validation(self, event):
+        if self.board[event[0]][event[1]][3] == False:
+            return True
+        else:
+            return False
+
+    # handle all possibilities what is clicked
+    def handle_click(self, event):
+
+        click = event   # only rename when legit square clicked
+
+        zero_filler = []  # if more areas with zeros, the process will run again on empty zero_filler list
+        # previous areas will be already deactivated for click so no need to keep the in the list
+
+        # case mine clicked
+        if self.board[click[0]][click[1]][1] == True:
+            self.board[click[0]][click[1]][4] = '[x]'
+            # print('Mine clicked, you lost.')
+            # exit game loop, ask for new game
+            # game lost
+            return True
+
+        # case number clicked
+        elif self.board[click[0]][click[1]][1] == False and self.board[click[0]][click[1]][2] != 0:
+            # print only the - is it possible to rewrite string with number <- it should work
+            self.board[click[0]][click[1]][4] = '[' + str(self.board[click[0]][click[1]][2]) + ']'
+            self.board[click[0]][click[1]][3] = True
+
+        # case 0 clicked
+        elif self.board[click[0]][click[1]][1] == False and self.board[click[0]][click[1]][2] == 0:
+            # BETTER SOLUTION - skipped - all 0 mines areas would have to be done at once not necessary
+            # function will compute areas (lists) of connected empty squares
+            # these will be added to self.empty_areas
+            # then the click output will be checked against those areas
+            # if the click will be in one of those areas,
+            #   all squares in area will change clicked=True and visibility to [.]
+
+            # connect all zeros and print all neighbors of this area with number
+            # pridat ctverec do listu
+            zero_filler.append(self.board[click[0]][click[1]])
+            # projet list kde je checked=False
+            # a divat se na vsechny sousedy a pokud tam bude soused s 0 tak pridat taky do listu
+            neighbors = [(-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0)]
+            break_iter = False
+
+            # looping through all neighbors - 100 is maximum FOR 10X10 BOARD
+            # number of fields- will be broken inbetween / ORWS * COLS for different board dimensions
+            for i in range(ROWS * COLS):
+                # print('filling list round', i)
+                len_start = len(zero_filler)
+                # if all items in zero filler list were alreqdy checked for neighbors - end loop
+                if break_iter == True:
+                    break
+                # condition if not cheched here # bude se iterovat jen pres tz ktery maji status checked=False
+                if zero_filler[i][5] == False:
+                    for k in range(8):
+                        # if neighbor is not out of bounds
+                        if not (zero_filler[i][6][0] + neighbors[k][0] < 0 or zero_filler[i][6][0] + neighbors[k][
+                            0] > ROWS - 1 or
+                                zero_filler[i][6][1] + neighbors[k][1] < 0 or zero_filler[i][6][1] + neighbors[k][
+                                    1] > COLS - 1):
+                            # pokud ma soused 0 min kolem sebe
+                            if \
+                            self.board[zero_filler[i][6][0] + neighbors[k][0]][zero_filler[i][6][1] + neighbors[k][1]][
+                                2] == 0:
+                                # append to zero fill list pridat souseda s 0 min okolo do zero fill listu pokud uztam neni
+                                if self.board[zero_filler[i][6][0] + neighbors[k][0]][
+                                    zero_filler[i][6][1] + neighbors[k][1]] not in zero_filler:
+                                    zero_filler.append(self.board[zero_filler[i][6][0] + neighbors[k][0]][
+                                                           zero_filler[i][6][1] + neighbors[k][1]])
+                                # change status only of the square that the program is currently on
+                                # self.board[zero_filler[i][6][0]][zero_filler[i][6][1]][4] = '[.]'
+
+                # jakmile checknut item v zero filler listu zmenime checked na True
+                self.board[zero_filler[i][6][0]][zero_filler[i][6][1]][5] = True
+                # print(zero_filler)
+                # print('len start', len_start, 'len end', len(zero_filler))
+
+                # leaving the loop when all items are checked
+                count_checked = 0
+                for i in range(len(zero_filler)):
+                    if zero_filler[i][5] == True:
+                        count_checked += 1
+                        # print('count checked', count_checked)
+                    if count_checked == len(zero_filler):
+                        break_iter = True
+
+            # muze byt zvlast funkce
+            # jakmile naplnime zero filler list, iterujeme listem, a menime status kazdeho clena
+            # clicked=True a menime vizual pro hrace na '[.]'
+            for i in range(len(zero_filler)):
+                zero_filler[i][3] = True
+                zero_filler[i][4] = '[.]'
+
+            # muze byt zvlast funkce
+            # naplneni okraje cisly     # DALO BY SE NAPASOVAT NA PREDCHOZI IF STATEMENTY, ALE OPATRNE
+            # projet zero_filler list a u vsech zkontrolovat souseda
+            # pokud ma soused cislo other than zero tak zmenit status na clicked a print value na to cislo
+            for i in range(len(zero_filler)):
+                for k in range(8):
+                    # if neighbor is not out of bounds
+                    if not (zero_filler[i][6][0] + neighbors[k][0] < 0 or zero_filler[i][6][0] + neighbors[k][
+                        0] > ROWS - 1 or
+                            zero_filler[i][6][1] + neighbors[k][1] < 0 or zero_filler[i][6][1] + neighbors[k][
+                                1] > COLS - 1):
+                        # pokud ma soused 1 a vic min kolem sebe a nema jeste propsanz ciso
+                        if (self.board[zero_filler[i][6][0] + neighbors[k][0]][zero_filler[i][6][1] + neighbors[k][1]][
+                            2] != 0 and
+                                self.board[zero_filler[i][6][0] + neighbors[k][0]][
+                                    zero_filler[i][6][1] + neighbors[k][1]][4] !=
+                                self.board[zero_filler[i][6][0] + neighbors[k][0]][
+                                    zero_filler[i][6][1] + neighbors[k][1]][2]):
+                            # zmenit print status na cislo a clicked na True
+                            self.board[zero_filler[i][6][0] + neighbors[k][0]][zero_filler[i][6][1] + neighbors[k][1]][
+                                3] = True
+                            self.board[zero_filler[i][6][0] + neighbors[k][0]][zero_filler[i][6][1] + neighbors[k][1]][
+                                4] = \
+                                '[' + str(self.board[zero_filler[i][6][0] + neighbors[k][0]][
+                                              zero_filler[i][6][1] + neighbors[k][1]][2]) + ']'
+
+    def game_won(self, mines):
+        count_clicks = 0
+        for row in self.board:
+            for i in range(len(row)):
+                if row[i][3] == True:
+                    count_clicks += 1
+
+        if count_clicks == ROWS * COLS - mines:
+            # if game won, reveal all squares
+            self.reveal_board_won()
+            # print('Game won!')
+            # print('---------')
+            return True
+
+    def reveal_board_won(self):
+        for row in self.board:
+            for i in range(len(row)):
+                if row[i][1] == True:
+                    row[i][4] = '[' + str(row[i][0]) + ']'
+
+    def make_all_unclickable(self):
+        for row in self.board:
+            for i in range(len(row)):
+                row[i][3] = True
+
+    # VISUAL PYSIMPLEGUI
+    def create_window(self, MINES):
+        # TODO FIND BEST THEME
+
+        menu_def = [['Difficulty', ['1 - Easy', '2 - Medium', '3 - Hard']]]
+
+        sg.theme('DarkBlue1')
+        # VISUAL PART
+        button_size = (4, 2)
+
+        # testing version 10x10 firm, later added some basic boards to choose from
+        layout = [[sg.Button('', pad=(0, 0), size=button_size, font = 'Franklin 11', key=(j, i)) for i in range(COLS)] for j in range(ROWS)]
+        layout.insert(0, [sg.Text('', expand_x=True),
+                          sg.Text('0.0', enable_events=True, key='-TIME-', font='Franklin 14', pad=(10, 10)),
+                          sg.Button('New game', font='Franklin 14', pad=(10, 10), key='-NEWGAME-'),
+                          sg.Text('', expand_x=True)])
+        layout.insert(0, [sg.Menu(menu_def)])
+        layout.append([sg.Text('Mines: ' + str(MINES), font='Franklin 13'),
+                       sg.Text('', expand_x=True),
+                       sg.Text('', font='Franklin 14', pad=(7, 7), key='-RESULT-'),
+                       sg.Text('', expand_x=True),
+                       sg.Text('Best: N/A', key='-BEST-', font='Franklin 13', pad=(0, 15))])
+
+        return sg.Window('Peter\'s Minesweeper', layout)
+
+    def start(self):
+        best_time = ''
+        closed = False
+
+        # outside loop - for tracking best time
+        while True:
+            # definitive close
+            if closed:
+                break
+
+            # print('help prints start')
+            self.fill_board()
+            # print('adding mines')
+            # print('Number of mines: ', end='')
+            MINES = self.add_mines_clever()
+            # print('computing neighboring mines')
+            self.compute_neighboring_mines()
+            # print('starting game')
+
+            # CREATE VISUAL
+            window = self.create_window(MINES)
+
+            start_time = 0
+            lost = False
+            time_paused = True
+            game_ended = False
+            elapsed_time = 0.0
+
+            # inner loop - one loop is one game - new one can only start by clicking on NEW GAME
+            while True:
+                event, values = window.read(timeout=10)
+
+                if event == '__TIMEOUT__':
+                    if best_time != '':
+                        window['-BEST-'].update('Best: ' + str(best_time))
+                    if not time_paused and not game_ended:
+                        # print(event) # __TIMEOUT__
+                        elapsed_time = round(time() - start_time, 1)
+                        window['-TIME-'].update(elapsed_time)
+
+                else:
+                    # WINDOW CLOSED
+                    if event == sg.WINDOW_CLOSED:
+                        closed = True
+                        break
+
+                    # NEWGAME CLICKED
+                    if event == '-NEWGAME-':
+                        window.close()
+                        window['-TIME-'].update('time')
+                        break
+                        # blank board, new mines
+
+                    # GAME MODE CHANGED
+                    if event == '1 - Easy':
+                        window.close()
+                        window['-TIME-'].update('time')
+                        best_time = ''
+                        global ROWS
+                        ROWS = 7
+                        global COLS
+                        COLS = 7
+                        global NUM_MINES
+                        NUM_MINES = ROWS * COLS // 8 + 1
+                        break
+
+                    elif event == '2 - Medium':
+                        window.close()
+                        window['-TIME-'].update('time')
+                        best_time = ''
+                        ROWS = 10
+                        COLS = 10
+                        NUM_MINES = ROWS * COLS // 7 + 1
+                        break
+
+                    elif event == '3 - Hard':
+                        window.close()
+                        window['-TIME-'].update('time')
+                        best_time = ''
+                        ROWS = 10
+                        COLS = 15
+                        NUM_MINES = ROWS * COLS // 6 + 1
+                        break
+
+                    # WHEN SQUARE IS CLICKED
+                    if event not in ['-NEWGAME-']:
+
+                        # TODO TIME STARTS WHEN FIRST SQUARE IS CLICKED - TIME HAS TO UPDATE ALL THE TIME
+                        if time_paused:
+                            start_time = time()
+                            time_paused = False
+
+                        # print(event)    # help print of coordinates - keys in squares
+                        # self.print_board_all_info(self.board)   # print all info from backend
+
+                        # FIRST VALIDATE THE CLICK
+                        if self.click_validation(event) == False:
+                            # print('invalid, already clicked')
+                            continue
+                        else:
+                            # print('valid')
+
+                            # THEN IF MINE CLICKED: Disable click on all squares - only NEW GAME can be clicked
+                            mine_clicked = self.handle_click(event)
+                            if mine_clicked:
+                                lost = True
+                                window['-RESULT-'].update('Game lost', background_color='#9D0F0F')
+                                # only new game button will start new game
+                                self.make_all_unclickable()
+                                time_paused = True
+                                game_ended = True
+
+                            # ALWAYS PRINT CURRENT BACKEND BOARD TO FRONTEND
+                            # print('update')
+                            # self.print_board_all_info(self.board)   # print all info from backend
+                            if lost == False:
+                                for row in self.board:
+                                    for i in range(len(row)):
+                                        if row[i][3] == True:
+                                            # print('barvit')
+                                            window[row[i][6]].update(row[i][4][1], button_color='#315A9E')
+                                    # if lost, print also mine clicked
+                            else:
+                                window[event].update('x', button_color='#DC2323')
+
+
+                            # CASE GAME WON
+                            if self.game_won(MINES):
+                                window['-RESULT-'].update('Game Won', background_color='#0A921D')
+                                # only new game button will start new game
+                                self.make_all_unclickable()
+                                time_paused = True
+                                game_ended = True
+                                # best time update
+                                if best_time == '':
+                                    best_time = elapsed_time
+                                else:
+                                    if best_time > elapsed_time:
+                                        best_time = elapsed_time
+
+                            # UPDATE BEST TIME WHEN GAME ENDED
+                            # if game_ended:
+                              #   if best_time != '':
+                                #     window['-BEST-'].update('Best: ' + str(best_time))
+
+
+                        # window[event].update(event)  # (event)### propis hodnoty
+
+
+if __name__ == '__main__':
+    minesweeper = Minesweeper()
+    minesweeper.start()
+
+
+# TODO IMPLEMENT RIGHT CLICK FLAG - not possible
+# TODO IMPLEMENT GAME MODES
+    # FIELD SIZE -
+    # DIFFICULTY -
+# TODO REMOVE PRINTS
+# TODO MAKE IT TO ACTUAL FILE
+
+# ------------------------------------
+# DONE IMPLEMENT TIME
+# DONE IMPLEMENT FASTEST SOLVE TRACKER
